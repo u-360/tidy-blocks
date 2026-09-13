@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>方块整理师 v2 - Tidy Blocks</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    overflow: hidden; touch-action: none;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  body {
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; min-height: 100dvh;
+    background: linear-gradient(160deg, #EDE6DF 0%, #DDD5CC 100%);
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  #app {
+    position: relative; width: 100vw; height: 100dvh;
+    display: flex; flex-direction: column;
+    max-width: 500px; max-height: 100dvh; overflow: hidden;
+  }
+
+  /* 顶部栏 */
+  #topBar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; background: rgba(255,255,255,0.65);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    flex-shrink: 0; font-size: 12px;
+  }
+  .tb-section { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .tb-label { font-size: 9px; color: #B0A898; letter-spacing: 0.5px; }
+  .tb-value { font-size: 18px; font-weight: 700; color: #6B7B8D; }
+  .tb-level { font-size: 11px; color: #7B6B8D; background: #F0E4F4; padding: 2px 10px; border-radius: 10px; }
+
+  /* 游戏主区域 */
+  #gameArea {
+    flex: 1; display: flex; justify-content: center; align-items: center;
+    padding: 4px 0; position: relative; min-height: 0;
+  }
+  #gameContainer {
+    position: relative; display: flex; gap: 6px; align-items: flex-start;
+  }
+  canvas#gameCanvas { display: block; border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+
+  /* 侧栏 */
+  #sideBar { width: 64px; display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+  .side-card {
+    background: rgba(255,255,255,0.65); border-radius: 8px; padding: 6px 4px;
+    text-align: center; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .sc-label { font-size: 8px; color: #B0A898; margin-bottom: 3px; }
+  .sc-value { font-size: 14px; font-weight: 700; color: #6B7B8D; }
+  #nextCanvas { display: block; margin: 0 auto; background: rgba(245,240,235,0.3); border-radius: 5px; }
+  .util-bar { height: 3px; background: #E8E0D8; border-radius: 2px; overflow: hidden; margin-top: 3px; }
+  .util-fill { height: 100%; background: linear-gradient(90deg, #A8C0D0, #C4A8D0); border-radius: 2px; transition: width 0.4s; }
+
+  /* 浮动提示 */
+  #floatTip {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(107,123,141,0.88); color: #fff; padding: 8px 16px;
+    border-radius: 20px; font-size: 13px; font-weight: 600;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s, transform 0.3s;
+    z-index: 100; text-align: center; max-width: 80%;
+    box-shadow: 0 4px 20px rgba(107,123,141,0.3);
+  }
+  #floatTip.show { opacity: 1; transform: translate(-50%, calc(-50% - 20px)); }
+
+  /* 底部区 */
+  #bottomArea {
+    flex-shrink: 0; padding: 0 6px 8px;
+    background: rgba(255,255,255,0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-radius: 14px 14px 0 0;
+  }
+  #powerups { display: flex; gap: 6px; padding: 4px 0; }
+  .pu-btn {
+    flex: 1; padding: 6px 3px; border: none; border-radius: 8px;
+    font-size: 10px; font-weight: 600; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    position: relative; transition: transform 0.15s; color: #fff;
+  }
+  .pu-btn:active { transform: scale(0.94); }
+  .pu-btn:disabled { opacity: 0.3; }
+  .pu-icon { font-size: 15px; }
+  .pu-text { font-size: 9px; opacity: 0.9; }
+  .pu-count { font-size: 9px; opacity: 0.65; }
+  .pu-compress { background: linear-gradient(135deg, #A8C0D0, #8FAFC0); }
+  .pu-divider { background: linear-gradient(135deg, #C4A8D0, #B094B8); }
+  .pu-hint { background: linear-gradient(135deg, #E8C4A0, #D8B490); }
+  .pu-cd { position: absolute; bottom: 0; left: 0; height: 2px; background: rgba(255,255,255,0.4); transition: width 0.1s linear; }
+
+  #controls { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 5px; padding-top: 4px; }
+  .ctrl-btn {
+    height: 50px; border: none; border-radius: 12px;
+    font-size: 22px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: transform 0.1s; position: relative;
+  }
+  .ctrl-btn:active { transform: scale(0.9); }
+  .ctrl-btn .ctrl-label {
+    position: absolute; bottom: 3px; font-size: 8px;
+    color: rgba(0,0,0,0.25); font-weight: 500;
+  }
+  .ctrl-l { background: linear-gradient(135deg, #D4CFC8, #C8C0B8); }
+  .ctrl-r { background: linear-gradient(135deg, #D4CFC8, #C8C0B8); }
+  .ctrl-rot { background: linear-gradient(135deg, #A8C0D0, #98B0C0); color: #fff; }
+  .ctrl-drop { background: linear-gradient(135deg, #E8C4A0, #D8B490); color: #fff; }
+
+  /* 覆盖层 */
+  #overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh;
+    background: rgba(245,240,235,0.97); display: none; flex-direction: column;
+    justify-content: center; align-items: center; z-index: 9999;
+    padding: 20px; text-align: center; max-width: 500px; margin: 0 auto;
+  }
+  #overlay.show { display: flex !important; }
+  .ol h1 { font-size: 24px; color: #6B7B8D; margin-bottom: 4px; }
+  .ol h2 { font-size: 16px; color: #999; margin-bottom: 10px; font-weight: 400; }
+  .ol p { font-size: 12px; color: #888; margin-bottom: 8px; line-height: 1.6; }
+  .ol-tip {
+    background: rgba(255,255,255,0.8); border-radius: 10px;
+    padding: 12px; font-size: 11px; color: #6B7B8D; line-height: 1.6; margin: 8px 0; max-width: 300px;
+  }
+  .ol-score { font-size: 42px; font-weight: 700; color: #6B7B8D; margin: 6px 0; }
+  .ol-btn {
+    padding: 14px 44px; border: none; border-radius: 28px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    background: linear-gradient(135deg, #8FAFC0, #A8C0D0); color: #fff;
+    box-shadow: 0 4px 14px rgba(143,175,192,0.25); margin-top: 8px;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .ol-btn:active { transform: scale(0.95); }
+  .ol-btn.share { background: linear-gradient(135deg, #E8C4A0, #D8B490); margin-left: 8px; }
+
+  /* 对比图 */
+  .compare-container { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; justify-content: center; }
+  .compare-box { background: #fff; border-radius: 8px; padding: 8px; text-align: center; }
+  .compare-box h3 { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .compare-box canvas { display: block; border-radius: 4px; }
+
+  @media screen and (orientation: landscape) and (max-height: 500px) {
+    #overlay::before { content: '请竖屏游玩'; font-size: 18px; color: #6B7B8D; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topBar">
+    <div class="tb-section"><span class="tb-label">得分</span><span class="tb-value" id="scoreVal">0</span></div>
+    <div class="tb-section"><span class="tb-level" id="levelBadge">初学者</span><span style="font-size:9px;color:#999;">Lv.<span id="levelVal">1</span></span></div>
+    <div class="tb-section"><span class="tb-label">整理</span><span class="tb-value" id="linesVal">0</span></div>
+  </div>
+
+  <div id="gameArea">
+    <div id="gameContainer">
+      <canvas id="gameCanvas"></canvas>
+      <div id="sideBar">
+        <div class="side-card">
+          <div class="sc-label">下一个</div>
+          <canvas id="nextCanvas" width="52" height="52"></canvas>
+        </div>
+        <div class="side-card">
+          <div class="sc-label">空间</div>
+          <div class="sc-value" id="utilVal">0%</div>
+          <div class="util-bar"><div class="util-fill" id="utilBar" style="width:0%"></div></div>
+        </div>
+        <div class="side-card">
+          <div class="sc-label">最高</div>
+          <div class="sc-value" id="hiScore" style="font-size:13px;">0</div>
+        </div>
+      </div>
+    </div>
+    <div id="floatTip"></div>
+  </div>
+
+  <div id="bottomArea">
+    <div id="powerups">
+      <button class="pu-btn pu-compress" id="btnCompress" disabled>
+        <span class="pu-icon">📦</span><span class="pu-text">压缩袋</span><span class="pu-count" id="compCnt">×2</span>
+        <div class="pu-cd" id="cdComp"></div>
+      </button>
+      <button class="pu-btn pu-divider" id="btnDivider" disabled>
+        <span class="pu-icon">📏</span><span class="pu-text">分隔板</span><span class="pu-count" id="divCnt">×2</span>
+        <div class="pu-cd" id="cdDiv"></div>
+      </button>
+      <button class="pu-btn pu-hint" id="btnHint" disabled>
+        <span class="pu-icon">💡</span><span class="pu-text">提示</span><span class="pu-count" id="hintCnt">×3</span>
+        <div class="pu-cd" id="cdHint"></div>
+      </button>
+    </div>
+    <div id="controls">
+      <button class="ctrl-btn ctrl-l" id="btnLeft">←<span class="ctrl-label">左</span></button>
+      <button class="ctrl-btn ctrl-r" id="btnRight">→<span class="ctrl-label">右</span></button>
+      <button class="ctrl-btn ctrl-rot" id="btnRotate">↻<span class="ctrl-label">旋转</span></button>
+      <button class="ctrl-btn ctrl-drop" id="btnDrop">⤓<span class="ctrl-label">下落</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="ol" id="overlayContent"></div>
+</div>
+
+<script>
+// ============================================================
+//  方块整理师 v2 - Optimized Edition
+//  "用俄罗斯方块的爽感，练真实的收纳思维"
+// ============================================================
+
+// ========== 常量定义 ==========
+const COLS = 8, ROWS = 16;
+let CELL = 36;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = COLS * CELL;
+canvas.height = ROWS * CELL;
+const nextCanvas = document.getElementById('nextCanvas');
+const nCtx = nextCanvas.getContext('2d');
+
+// 莫兰迪色系
+const PAL = {
+  book:'#A8C0D0', clothes:'#D4B8E8', kitchen:'#C0A88A', plant:'#9BB5A0',
+  toy:'#E8C4A0', elec:'#B0B8C0', paper:'#C8C0B8', glass:'#A8D0D8', divider:'#C4A8D0'
+};
+
+// ========== 物品定义 ==========
+const ITEMS = [
+  { id:'book',    name:'书籍', icon:'📖', color:PAL.book,    cw:1, ch:3 },
+  { id:'clothes', name:'衣物', icon:'👕', color:PAL.clothes, cw:2, ch:2 },
+  { id:'kitchen', name:'厨具', icon:'🍳', color:PAL.kitchen, cw:2, ch:4 },
+  { id:'plant',   name:'绿植', icon:'🌿', color:PAL.plant,   cw:3, ch:2 },
+  { id:'toy',     name:'玩具', icon:'🧸', color:PAL.toy,     cw:3, ch:2 },
+  { id:'elec',    name:'电器', icon:'📱', color:PAL.elec,    cw:2, ch:2 },
+  { id:'paper',   name:'文件', icon:'📄', color:PAL.paper,   cw:3, ch:1 },
+  { id:'glass',   name:'容器', icon:'🫙', color:PAL.glass,   cw:2, ch:2 },
+];
+
+// 各物品的单元格偏移 [col, row]
+const SHAPES = {
+  book:    [[0,0],[0,1],[0,2]],
+  clothes: [[0,0],[1,0],[0,1],[1,1]],
+  kitchen: [[0,0],[1,0],[0,1],[1,1],[0,2],[1,2],[0,3],[1,3]],
+  plant:   [[0,0],[1,0],[2,0],[0,1],[1,1]],
+  toy:     [[0,0],[1,1],[2,1]],
+  elec:    [[0,0],[0,1],[1,1]],
+  paper:   [[0,0],[1,0],[2,0]],
+  glass:   [[0,0],[0,1],[1,1]],
+};
+
+// ========== 等级/速度 ==========
+const LEVELS = [
+  { lines:0,  title:'初学者' },
+  { lines:3,  title:'整理新手' },
+  { lines:8,  title:'收纳学徒' },
+  { lines:18, title:'整理达人' },
+  { lines:30, title:'空间规划师' },
+  { lines:45, title:'收纳大师' },
+];
+const SPEEDS = [1100, 950, 800, 680, 560, 460];
+
+// ========== 小贴士 ==========
+const TIPS = {
+  vertical: "竖放衣物省30%空间 ✅",
+  horizontal: "横放更易取用 ✅",
+  edge: "边缘位置取用更方便 ✅",
+  corner: "角落利用最大化！✅",
+  compact: "紧凑排列空间利用率更高 ✅",
+  accessibility: "常用物品放外侧得分更高 ✅",
+  fullRow: "一行整理完成！🎉",
+  combo: "连续整理，收纳音阶上升 🎵",
+  tip1: "📦 竖放比叠放省空间，试试把衣物立起来",
+  tip2: "📦 透明收纳盒让物品一目了然",
+  tip3: "📦 小物件用分隔盒分类",
+  tip4: "📦 鞋子竖直摆放比平放多放一倍",
+  tip5: "📦 电线用理线器固定",
+  tip6: "📦 厨房台面少放物品，不常用的收进柜子",
+};
+
+const INSPIRATIONS = [
+  "🏠 日式收纳：一物一位，归位即整理",
+  "🏠 断舍离：只保留让你心动的物品",
+  "🏠 胶囊衣橱：少而精的穿搭哲学",
+  "🏠 收纳三分露七分藏，美观实用兼顾",
+  "🏠 衣柜分区：常用+次常用+换季",
+];
+
+// ========== 游戏状态 ==========
+let grid = [], curPiece = null, nextPiece = null;
+let score = 0, lines = 0, level = 0;
+let gameOver = false, gameRunning = false;
+let dropInterval = SPEEDS[0], lastDrop = 0;
+let hiScore = parseInt(localStorage.getItem('tbHi') || '0');
+let compCount = 2, divCount = 2, hintCount = 3;
+let compCD = 0, divCD = 0, hintCD = 0;
+let divCol = -1, divOn = false;
+let particles = [], floatTips = [];
+let audioCtx = null, musicPlaying = false, melIdx = 0, melTimer = null;
+let pitchShift = 0; // 音阶提升
+let animId = null;
+let lastTime = 0;
+
+// ========== 初始化 ==========
+function resizeCanvas() {
+  const area = document.getElementById('gameArea');
+  const w = area.clientWidth - 74;
+  const h = area.clientHeight - 8;
+  CELL = Math.min(Math.floor(w / COLS), Math.floor(h / ROWS), 44);
+  CELL = Math.max(CELL, 22);
+  canvas.width = COLS * CELL;
+  canvas.height = ROWS * CELL;
+}
+
+function initGrid() {
+  grid = Array.from({ length: ROWS }, () =>
+    Array.from({ length: COLS }, () => ({ filled: false, color: null, type: null, item: null }))
+  );
+  if (divOn && divCol >= 0) {
+    for (let r = 0; r < ROWS; r++)
+      grid[r][dividerCol()] = { filled: true, color: PAL.divider, type: 'divider', item: null };
+  }
+}
+
+function dividerCol() { return divCol; }
+
+function pickItem() {
+  return ITEMS[Math.floor(Math.random() * ITEMS.length)];
+}
+
+function makePiece(item) {
+  const blocks = SHAPES[item.id].map(([c, r]) => [c, r]);
+  return { item, blocks, x: Math.floor((COLS - item.cw) / 2), y: -item.ch };
+}
+
+function initGame() {
+  initGrid();
+  score = 0; lines = 0; level = 0;
+  compCount = 2; divCount = 2; hintCount = 3;
+  compCD = 0; divCD = 0; hintCD = 0;
+  divOn = false; divCol = -1;
+  dropInterval = SPEEDS[0];
+  pitchShift = 0;
+  gameOver = false;
+  particles = [];
+  floatTips = [];
+  updateUI();
+  nextPiece = makePiece(pickItem());
+  spawnNext();
+}
+
+function spawnNext() {
+  curPiece = nextPiece;
+  nextPiece = makePiece(pickItem());
+  if (!canPlace(curPiece.blocks, curPiece.x, curPiece.y)) {
+    gameOver = true; endGame();
+  }
+  drawNext();
+  showTip(TIPS.tip1, 3000);
+}
+
+// ========== 碰撞检测 ==========
+function canPlace(blocks, px, py) {
+  for (const [bx, by] of blocks) {
+    const nx = px + bx, ny = py + by;
+    if (nx < 0 || nx >= COLS || ny >= ROWS) return false;
+    if (ny >= 0 && grid[ny][nx].filled) return false;
+  }
+  return true;
+}
+
+// ========== 操作 ==========
+function moveDown() {
+  if (canPlace(curPiece.blocks, curPiece.x, curPiece.y + 1)) { curPiece.y++; return true; }
+  return false;
+}
+function moveLeft() {
+  if (canPlace(curPiece.blocks, curPiece.x - 1, curPiece.y)) curPiece.x--;
+}
+function moveRight() {
+  if (canPlace(curPiece.blocks, curPiece.x + 1, curPiece.y)) curPiece.x++;
+}
+function rotatePiece() {
+  const rotated = curPiece.blocks.map(([x, y]) => [y, x]); // 90° clockwise
+  // Normalize
+  const minX = Math.min(...rotated.map(p => p[0]));
+  const minY = Math.min(...rotated.map(p => p[1]));
+  const norm = rotated.map(([x, y]) => [x - minX, y - minY]);
+  // Wall kicks
+  for (const kick of [0, -1, 1, -2, 2]) {
+    if (canPlace(norm, curPiece.x + kick, curPiece.y)) {
+      curPiece.blocks = norm;
+      curPiece.x += kick;
+      playSound('rotate');
+      return;
+    }
+  }
+}
+function hardDrop() {
+  let d = 0;
+  while (canPlace(curPiece.blocks, curPiece.x, curPiece.y + 1)) { curPiece.y++; d++; }
+  score += d * 2;
+  placePiece();
+  playSound('drop');
+}
+function placePiece() {
+  let edgeCells = 0, cornerCells = 0;
+  for (const [bx, by] of curPiece.blocks) {
+    const gx = curPiece.x + bx, gy = curPiece.y + by;
+    if (gy >= 0 && gy < ROWS && gx >= 0 && gx < COLS) {
+      grid[gy][gx] = { filled: true, color: curPiece.item.color, type: curPiece.item.id, item: curPiece.item };
+      // 计算边缘/角落得分
+      if (gx === 0 || gx === COLS - 1 || gy === 0) edgeCells++;
+      if ((gx === 0 || gx === COLS - 1) && gy === 0) cornerCells++;
+    }
+  }
+  // 边缘放置加分
+  if (edgeCells > 0) { score += edgeCells * 15; showTip(TIPS.accessibility, 1800); }
+  if (cornerCells > 0) { score += cornerCells * 25; showTip(TIPS.corner, 1500); }
+  checkLines();
+  spawnNext();
+}
+
+// ========== 消行 ==========
+function checkLines() {
+  let cleared = 0;
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (grid[r].every(c => c.filled)) {
+      cleared++;
+      for (let c = 0; c < COLS; c++) {
+        spawnParticle(c * CELL + CELL / 2, r * CELL + CELL / 2, grid[r][c].color || '#fff', 2);
+      }
+      grid.splice(r, 1);
+      const nr = Array.from({ length: COLS }, () => ({ filled: false, color: null, type: null, item: null }));
+      grid.unshift(nr);
+      r++;
+    }
+  }
+  if (cleared > 0) {
+    const pts = { 1: 100, 2: 300, 3: 500, 4: 800 };
+    score += (pts[cleared] || 0) * (level + 1);
+    lines += cleared;
+    // 提升音阶
+    pitchShift = cleared;
+    // 随机道具
+    if (Math.random() < 0.3 && compCount < 4) compCount++;
+    if (Math.random() < 0.15 && divCount < 4) divCount++;
+    // 提示
+    if (cleared >= 2) {
+      showTip(TIPS.combo, 2000);
+    } else {
+      showTip(TIPS.fullRow, 1500);
+    }
+    // 等级
+    checkLevel();
+    playSound('clear', cleared);
+    updateUI();
+  }
+}
+
+function checkLevel() {
+  let newL = 0;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (lines >= LEVELS[i].lines) { newL = i; break; }
+  }
+  if (newL > level) {
+    level = newL;
+    dropInterval = SPEEDS[level] || 350;
+    document.getElementById('levelBadge').textContent = LEVELS[level].title;
+    document.getElementById('levelVal').textContent = level + 1;
+    showTip('🎉 晋升 ' + LEVELS[level].title + '！', 2500);
+  }
+}
+
+// ========== 道具 ==========
+function useCompress() {
+  if (compCount <= 0 || compCD > 0) return;
+  compCount--; compCD = 10;
+  let maxF = 0, col = 3;
+  for (let c = 0; c < COLS; c++) {
+    let f = grid.reduce((s, row) => s + (row[c].filled ? 1 : 0), 0);
+    if (f > maxF) { maxF = f; col = c; }
+  }
+  for (let r = 0; r < ROWS; r++) {
+    if (grid[r][col].filled) {
+      spawnParticle(col * CELL + CELL / 2, r * CELL + CELL / 2, PAL.book, 1);
+      grid[r][col] = { filled: false, color: null, type: null, item: null };
+    }
+  }
+  score += 50; playSound('powerup'); updateUI();
+  showTip('📦 压缩袋激活！释放空间', 1500);
+}
+
+function useDivider() {
+  if (divCount <= 0 || divCD > 0) return;
+  divCount--; divCD = 15;
+  if (!divOn) {
+    let minF = COLS, best = Math.floor(COLS / 2);
+    for (let c = 0; c < COLS; c++) {
+      let f = grid.reduce((s, row) => s + (row[c].filled ? 1 : 0), 0);
+      if (f < minF) { minF = f; best = c; }
+    }
+    divCol = best; divOn = true;
+    for (let r = 0; r < ROWS; r++)
+      grid[r][divCol] = { filled: true, color: PAL.divider, type: 'divider', item: null };
+    showTip('📏 分隔板已放置', 1500);
+  } else {
+    for (let r = 0; r < ROWS; r++)
+      grid[r][divCol] = { filled: false, color: null, type: null, item: null };
+    divOn = false; divCol = -1;
+  }
+  playSound('powerup'); updateUI();
+}
+
+function useHint() {
+  if (hintCount <= 0 || hintCD > 0 || !curPiece) return;
+  hintCount--; hintCD = 8;
+  // Find best placement
+  let bestScore = -1, bestX = curPiece.x, bestY = curPiece.y;
+  for (let tx = 0; tx < COLS; tx++) {
+    for (let ty = -curPiece.item.ch; ty < ROWS; ty++) {
+      if (canPlace(curPiece.blocks, tx, ty)) {
+        let s = 0;
+        // Prefer lower positions
+        for (const [bx, by] of curPiece.blocks) {
+          if (ty + by >= 0) s += (ROWS - 1 - (ty + by)) * 10;
+          if (tx + bx === 0 || tx + bx === COLS - 1) s += 20; // edge bonus
+          if ((tx + bx === 0 || tx + bx === COLS - 1) && ty + by === 0) s += 30;
+        }
+        if (s > bestScore) { bestScore = s; bestX = tx; bestY = ty; }
+      }
+    }
+  }
+  if (bestScore >= 0) {
+    curPiece.x = bestX; curPiece.y = bestY;
+    showTip('💡 提示：当前位置已高亮', 2500);
+    // Brief highlight
+    highlightHint(bestX, bestY);
+  }
+  updateUI();
+}
+
+let hintTimer = null;
+function highlightHint(px, py) {
+  const tipEl = document.getElementById('floatTip');
+  tipEl.textContent = '💡 放置在此处';
+  tipEl.classList.add('show');
+  setTimeout(() => tipEl.classList.remove('show'), 1500);
+}
+
+// ========== 音效系统 ==========
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playSound(type, intensity = 1) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const base = 1 + pitchShift * 0.05; // pitch shift multiplier
+
+  if (type === 'drop') {
+    // 木质咔哒声
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = 150 * base;
+    g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.1);
+  } else if (type === 'rotate') {
+    // 纸张摩擦
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3;
+    const src = audioCtx.createBufferSource(), g = audioCtx.createGain();
+    src.buffer = buf;
+    g.gain.setValueAtTime(0.03, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    src.connect(g); g.connect(audioCtx.destination);
+    src.start(t); src.stop(t + 0.08);
+  } else if (type === 'clear') {
+    const freqs = [523, 659, 784, 1047];
+    freqs.forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f * base;
+      g.gain.setValueAtTime(0.035, t + i * 0.07);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.15);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t + i * 0.07); o.stop(t + i * 0.07 + 0.15);
+    });
+  } else if (type === 'powerup') {
+    [440, 554, 659, 880].forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f * base;
+      g.gain.setValueAtTime(0.03, t + i * 0.08);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.15);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t + i * 0.08); o.stop(t + i * 0.08 + 0.15);
+    });
+  } else if (type === 'gameover') {
+    [392, 349, 330, 262].forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f * base;
+      g.gain.setValueAtTime(0.04, t + i * 0.2);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.35);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t + i * 0.2); o.stop(t + i * 0.2 + 0.35);
+    });
+  }
+}
+
+// 背景音乐 - 整理音阶
+const MELODY = [523,587,659,784,659,587,523,493,440,493,523,587,523,440,392,440,523,659,784,880,784,659,523,440,493,587,659,523,440,392,349,392,440,523,587,659,523,440,392,349,330,392,440,523,440,392,349,330];
+function startMusic() {
+  if (!audioCtx || musicPlaying) return;
+  musicPlaying = true; melIdx = 0; playMusicNote();
+}
+function playMusicNote() {
+  if (!musicPlaying) return;
+  const t = audioCtx.currentTime;
+  const freq = MELODY[melIdx % MELODY.length] * (1 + pitchShift * 0.04); // dynamic pitch
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.015, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.3);
+  // 和声
+  const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
+  o2.type = 'triangle'; o2.frequency.value = freq * 1.5;
+  g2.gain.setValueAtTime(0.008, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  o2.connect(g2); g2.connect(audioCtx.destination);
+  o2.start(t); o2.stop(t + 0.35);
+  melIdx++;
+  melTimer = setTimeout(playMusicNote, 667);
+}
+function stopMusic() {
+  musicPlaying = false; if (melTimer) clearTimeout(melTimer);
+}
+
+// ========== 粒子 ==========
+function spawnParticle(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y, vx: (Math.random() - 0.5) * 4, vy: -Math.random() * 3 - 1,
+      life: 1, decay: 0.02 + Math.random() * 0.015, size: 2 + Math.random() * 2, color
+    });
+  }
+}
+function updateParticles() {
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= p.decay; });
+  particles = particles.filter(p => p.life > 0);
+}
+
+// ========== 浮动提示 ==========
+function showTip(text, duration) {
+  const tipEl = document.getElementById('floatTip');
+  tipEl.textContent = text;
+  tipEl.classList.add('show');
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => tipEl.classList.remove('show'), duration || 2000);
+}
+
+// ========== 渲染 ==========
+function drawRounded(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawCell(ctx, x, y, color, size, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  const p = 1.5;
+  drawRounded(ctx, x + p, y + p, size - p * 2, size - p * 2, 5);
+  ctx.fillStyle = color; ctx.fill();
+  // highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  drawRounded(ctx, x + p, y + p, size - p * 2, (size - p * 2) * 0.3, 4);
+  ctx.fill();
+  // icon
+  ctx.globalAlpha = alpha * 0.35;
+  ctx.font = `${size * 0.45}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  // find item type for icon
+  const col = Math.floor((x + size / 2) / CELL);
+  const row = Math.floor((y + size / 2) / CELL);
+  if (row >= 0 && row < ROWS && col >= 0 && col < COLS && grid[row][col].item) {
+    ctx.fillText(grid[row][col].item.icon, x + size / 2, y + size / 2);
+  } else if (curPiece && curPiece.item) {
+    // For current piece, use the item icon
+    ctx.globalAlpha = alpha * 0.4;
+    ctx.fillText(curPiece.item.icon, x + size / 2, y + size / 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha;
+}
+
+function drawGrid() {
+  // bg
+  ctx.fillStyle = '#F5F0EB';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // grid lines
+  ctx.strokeStyle = '#E8E0D8'; ctx.lineWidth = 0.5;
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath(); ctx.moveTo(0, r * CELL); ctx.lineTo(COLS * CELL, r * CELL); ctx.stroke();
+  }
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath(); ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, ROWS * CELL); ctx.stroke();
+  }
+  // divider
+  if (divOn && divCol >= 0) {
+    ctx.fillStyle = '#C4A8D030';
+    ctx.fillRect(divCol * CELL, 0, CELL, ROWS * CELL);
+    ctx.strokeStyle = '#C4A8D0'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.strokeRect(divCol * CELL + 1, 0, CELL - 2, ROWS * CELL);
+    ctx.setLineDash([]);
+  }
+  // 存储箱边框
+  ctx.strokeStyle = 'rgba(107,123,141,0.15)'; ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, COLS * CELL - 2, ROWS * CELL - 2);
+}
+
+function drawPieces() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c].filled) {
+        drawCell(ctx, c * CELL, r * CELL, grid[r][c].color, CELL);
+      }
+    }
+  }
+}
+
+function drawGhost() {
+  if (!curPiece) return;
+  let gy = curPiece.y;
+  while (canPlace(curPiece.blocks, curPiece.x, gy + 1)) gy++;
+  if (gy !== curPiece.y) {
+    ctx.globalAlpha = 0.1;
+    for (const [bx, by] of curPiece.blocks) {
+      const gx = (curPiece.x + bx) * CELL, gyy = (gy + by) * CELL;
+      if (gyy >= 0) drawCell(ctx, gx, gyy, curPiece.item.color, CELL);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawCurrent() {
+  if (!curPiece) return;
+  for (const [bx, by] of curPiece.blocks) {
+    const gx = (curPiece.x + bx) * CELL, gy = (curPiece.y + by) * CELL;
+    if (gy >= 0) drawCell(ctx, gx, gy, curPiece.item.color, CELL);
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.save(); ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill(); ctx.restore();
+  });
+}
+
+function drawNext() {
+  nCtx.clearRect(0, 0, 52, 52);
+  if (!nextPiece) return;
+  const item = nextPiece.item;
+  nCtx.fillStyle = item.color;
+  drawRounded(nCtx, 10, 10, 32, 32, 8);
+  nCtx.fill();
+  nCtx.globalAlpha = 0.4;
+  nCtx.font = '18px sans-serif';
+  nCtx.textAlign = 'center'; nCtx.textBaseline = 'middle';
+  nCtx.fillText(item.icon, 26, 26);
+  nCtx.globalAlpha = 1;
+}
+
+function drawFrame() {
+  drawGrid();
+  drawGhost();
+  drawPieces();
+  drawCurrent();
+  drawParticles();
+  updateUI();
+}
+
+// ========== UI ==========
+function updateUI() {
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('linesVal').textContent = lines;
+  document.getElementById('levelVal').textContent = level + 1;
+  let filled = 0;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c].filled) filled++;
+  const util = Math.round((filled / (ROWS * COLS)) * 100);
+  document.getElementById('utilVal').textContent = util + '%';
+  document.getElementById('utilBar').style.width = util + '%';
+  document.getElementById('compCnt').textContent = '×' + compCount;
+  document.getElementById('divCnt').textContent = '×' + divCount;
+  document.getElementById('hintCnt').textContent = '×' + hintCount;
+  document.getElementById('btnCompress').disabled = compCount <= 0 || compCD > 0;
+  document.getElementById('btnDivider').disabled = divCount <= 0 || divCD > 0;
+  document.getElementById('btnHint').disabled = hintCount <= 0 || hintCD > 0;
+  document.getElementById('cdComp').style.width = Math.max(0, (1 - compCD / 10) * 100) + '%';
+  document.getElementById('cdDiv').style.width = Math.max(0, (1 - divCD / 15) * 100) + '%';
+  document.getElementById('cdHint').style.width = Math.max(0, (1 - hintCD / 8) * 100) + '%';
+  if (score > hiScore) { hiScore = score; localStorage.setItem('tbHi', hiScore); }
+  document.getElementById('hiScore').textContent = hiScore;
+}
+
+// ========== 游戏循环 ==========
+function gameLoop(ts) {
+  animId = requestAnimationFrame(gameLoop);
+  if (!gameRunning) return;
+  if (gameOver) { drawFrame(); return; }
+
+  const dt = ts - lastDrop;
+  if (dt > dropInterval) {
+    if (!moveDown()) { placePiece(); }
+    lastDrop = ts;
+  }
+
+  if (compCD > 0) compCD = Math.max(0, compCD - 1 / 60);
+  if (divCD > 0) divCD = Math.max(0, divCD - 1 / 60);
+  if (hintCD > 0) hintCD = Math.max(0, hintCD - 1 / 60);
+
+  updateParticles();
+  drawFrame();
+}
+
+// ========== 覆盖层 ==========
+function showOverlay(type) {
+  const o = document.getElementById('overlay');
+  const c = document.getElementById('overlayContent');
+  if (type === 'start') {
+    c.innerHTML = `
+      <h1>📦 方块整理师</h1>
+      <h2>Tidy Blocks v2</h2>
+      <p>将家居物品整齐排列<br>填满一行即可完成整理！</p>
+      <div class="ol-tip">
+        🎮 底部按钮控制 · ← → 移动 · ↻ 旋转 · ⤓ 快速下落<br>
+        💡 边缘放置得分更高 · 连续消除提升音阶
+      </div>
+      <button class="ol-btn" onclick="window.startGame()">开始整理 🧹</button>
+    `;
+    o.classList.add('show');
+    o.onclick = function (e) {
+      if (e.target === o || e.target.classList.contains('ol')) {
+        window.startGame();
+      }
+    };
+  } else if (type === 'gameover') {
+    // 生成对比图
+    c.innerHTML = `
+      <h2>整理结束</h2>
+      <div class="ol-score">${score}</div>
+      <p>整理了 ${lines} 行空间 · 等级：${LEVELS[level].title}</p>
+      <div class="compare-container">
+        <div class="compare-box">
+          <h3>你的方案</h3>
+          <canvas id="myPlan" width="${COLS * 18}" height="${ROWS * 18}"></canvas>
+        </div>
+        <div class="compare-box">
+          <h3>专业方案</h3>
+          <canvas id="proPlan" width="${COLS * 18}" height="${ROWS * 18}"></canvas>
+        </div>
+      </div>
+      <div class="ol-tip">${INSPIRATIONS[Math.floor(Math.random() * INSPIRATIONS.length)]}</div>
+      <button class="ol-btn" onclick="window.startGame()">再来一次 🔄</button>
+      <button class="ol-btn share" onclick="window.shareResult()">分享方案 📤</button>
+    `;
+    o.classList.add('show');
+    o.onclick = function (e) {
+      if (e.target === o || e.target.classList.contains('ol')) {
+        window.startGame();
+      }
+    };
+    // Draw comparison canvases
+    setTimeout(() => drawComparison(), 100);
+  }
+}
+
+function hideOverlay() { document.getElementById('overlay').classList.remove('show'); }
+
+function drawComparison() {
+  // 你的方案
+  const myC = document.getElementById('myPlan');
+  if (!myC) return;
+  const mCtx = myC.getContext('2d');
+  mCtx.fillStyle = '#F5F0EB';
+  mCtx.fillRect(0, 0, myC.width, myC.height);
+  // Draw grid mini
+  const mc = CELL / 2;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c].filled) {
+        mCtx.fillStyle = grid[r][c].color;
+        mCtx.fillRect(c * mc, r * mc, mc - 0.5, mc - 0.5);
+      }
+    }
+  }
+
+  // 专业方案 (simulated: fill from bottom, dense packing)
+  const proC = document.getElementById('proPlan');
+  if (!proC) return;
+  const pCtx = proC.getContext('2d');
+  pCtx.fillStyle = '#F5F0EB';
+  pCtx.fillRect(0, 0, proC.width, proC.height);
+  // Simulate optimal fill
+  const pGrid = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+  let pi = 0;
+  // Fill row by row with random items
+  for (let r = ROWS - 1; r >= 0; r--) {
+    for (let c = 0; c < COLS; c++) {
+      if (!pGrid[r][c]) {
+        const item = ITEMS[pi % ITEMS.length];
+        pGrid[r][c] = true;
+        pCtx.fillStyle = item.color;
+        pCtx.fillRect(c * mc, r * mc, mc - 0.5, mc - 0.5);
+        pi++;
+      }
+    }
+  }
+}
+
+window.shareResult = function () {
+  const text = `📦 方块整理师 v2\n得分：${score}\n整理了 ${lines} 行空间\n等级：${LEVELS[level].title}\n\n用俄罗斯方块的爽感，练真实的收纳思维！`;
+  if (navigator.share) {
+    navigator.share({ title: '方块整理师 v2', text }).catch(() => {});
+  } else {
+    // fallback: copy to clipboard
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        showTip('📤 已复制到剪贴板！', 2000);
+      });
+    } else {
+      showTip('💬 ' + text.substring(0, 30) + '...', 3000);
+    }
+  }
+};
+
+function endGame() {
+  stopMusic();
+  playSound('gameover');
+  showOverlay('gameover');
+}
+
+function startGame() {
+  initAudio();
+  hideOverlay();
+  initGame();
+  gameRunning = true;
+  startMusic();
+  lastDrop = performance.now();
+}
+
+// ========== 输入 ==========
+document.addEventListener('keydown', e => {
+  if (!gameRunning || gameOver) return;
+  switch (e.code) {
+    case 'ArrowLeft': moveLeft(); e.preventDefault(); break;
+    case 'ArrowRight': moveRight(); e.preventDefault(); break;
+    case 'ArrowDown': if (moveDown()) score++; e.preventDefault(); break;
+    case 'ArrowUp': rotatePiece(); e.preventDefault(); break;
+    case 'Space': hardDrop(); e.preventDefault(); break;
+  }
+  updateUI();
+});
+
+// 虚拟按键
+function setupTouchBtn(id, action) {
+  const btn = document.getElementById(id);
+  let interval = null, timeout = null;
+  const doAction = (e) => {
+    e.preventDefault();
+    if (!gameRunning || gameOver || !curPiece) return;
+    action();
+    updateUI();
+  };
+  btn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    doAction(e);
+    if (id === 'btnLeft' || id === 'btnRight') {
+      timeout = setTimeout(() => {
+        interval = setInterval(() => {
+          if (gameRunning && !gameOver) action();
+        }, 80);
+      }, 250);
+    }
+  }, { passive: false });
+  btn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    clearTimeout(timeout); clearInterval(interval);
+  });
+  btn.addEventListener('touchcancel', (e) => {
+    clearTimeout(timeout); clearInterval(interval);
+  });
+  btn.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    doAction(e);
+  });
+}
+
+setupTouchBtn('btnLeft', moveLeft);
+setupTouchBtn('btnRight', moveRight);
+setupTouchBtn('btnRotate', rotatePiece);
+setupTouchBtn('btnDrop', hardDrop);
+document.getElementById('btnCompress').addEventListener('click', useCompress);
+document.getElementById('btnCompress').addEventListener('touchstart', (e) => { e.preventDefault(); useCompress(); }, { passive: false });
+document.getElementById('btnDivider').addEventListener('click', useDivider);
+document.getElementById('btnDivider').addEventListener('touchstart', (e) => { e.preventDefault(); useDivider(); }, { passive: false });
+document.getElementById('btnHint').addEventListener('click', useHint);
+document.getElementById('btnHint').addEventListener('touchstart', (e) => { e.preventDefault(); useHint(); }, { passive: false });
+
+// ========== 初始化 ==========
+document.getElementById('hiScore').textContent = hiScore;
+showOverlay('start');
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+animId = requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
