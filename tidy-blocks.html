@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方块整理师 Tidy Blocks</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #F5F0EB 0%, #E8E0D8 50%, #DDD5CC 100%);
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    overflow: hidden;
+    color: #4A4A4A;
+  }
+  #gameWrapper {
+    display: flex; gap: 24px; align-items: flex-start;
+    padding: 20px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 24px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+    backdrop-filter: blur(10px);
+  }
+  #leftPanel { display: flex; flex-direction: column; gap: 12px; width: 180px; }
+  #mainPanel { position: relative; }
+  #rightPanel { display: flex; flex-direction: column; gap: 12px; width: 220px; }
+  canvas#gameCanvas {
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    display: block;
+  }
+  .panel-card {
+    background: rgba(255,255,255,0.85);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  }
+  .panel-card h3 {
+    font-size: 13px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .score-display {
+    font-size: 36px;
+    font-weight: 700;
+    color: #6B7B8D;
+    text-align: center;
+    line-height: 1;
+  }
+  .stat-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #F0EDE8;
+    font-size: 13px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: #999; font-size: 12px; }
+  .stat-value { color: #6B7B8D; font-weight: 600; }
+  #nextCanvas {
+    display: block;
+    margin: 0 auto;
+    border-radius: 8px;
+    background: rgba(245,240,235,0.5);
+  }
+  .tip-card {
+    background: linear-gradient(135deg, #E8F4F8 0%, #F0EDE8 100%);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #5A6B7A;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+  }
+  .tip-card .tip-icon { margin-right: 8px; font-size: 16px; }
+  .tip-card .tip-text { flex: 1; }
+  .powerup-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .powerup-btn::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(135deg, transparent, rgba(255,255,255,0.3));
+    pointer-events: none;
+  }
+  .btn-compress {
+    background: linear-gradient(135deg, #A8C0D0, #8FAFC0);
+    color: white;
+  }
+  .btn-divider {
+    background: linear-gradient(135deg, #C4A8D0, #B094B8);
+    color: white;
+  }
+  .powerup-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  .powerup-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .cooldown-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.6);
+    transition: width 0.1s linear;
+  }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(245,240,235,0.95);
+    border-radius: 12px;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    padding: 30px;
+    text-align: center;
+  }
+  #overlay.show { display: flex; }
+  #overlay h1 { font-size: 24px; color: #6B7B8D; margin-bottom: 8px; }
+  #overlay h2 { font-size: 20px; color: #7A8A9A; margin-bottom: 8px; }
+  #overlay p { font-size: 14px; color: #999; margin-bottom: 16px; line-height: 1.6; }
+  .overlay-score { font-size: 42px; font-weight: 700; color: #6B7B8D; margin: 12px 0; }
+  .overlay-tip {
+    background: rgba(255,255,255,0.8);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 13px;
+    color: #6B7B8D;
+    line-height: 1.7;
+    margin: 12px 0;
+    max-width: 340px;
+  }
+  .btn-primary {
+    padding: 14px 36px;
+    border: none;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    background: linear-gradient(135deg, #8FAFC0, #A8C0D0);
+    color: white;
+    box-shadow: 0 4px 15px rgba(143,175,192,0.3);
+    transition: all 0.3s;
+    margin: 6px;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(143,175,192,0.4); }
+  .controls-info {
+    font-size: 11px;
+    color: #BBB;
+    text-align: center;
+    line-height: 1.8;
+    margin-top: 8px;
+  }
+  .level-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #E8D5F5, #D4B8E8);
+    color: #6B4D8A;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .utilization-bar {
+    height: 6px;
+    background: #F0EDE8;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .utilization-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #A8C0D0, #C4A8D0);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+</style>
+</head>
+<body>
+
+<div id="gameWrapper">
+  <!-- Left Panel -->
+  <div id="leftPanel">
+    <div class="panel-card">
+      <h3>得分</h3>
+      <div class="score-display" id="scoreDisplay">0</div>
+    </div>
+    <div class="panel-card">
+      <h3>统计</h3>
+      <div class="stat-row">
+        <span class="stat-label">整理行数</span>
+        <span class="stat-value" id="linesDisplay">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">空间利用率</span>
+        <span class="stat-value" id="utilDisplay">0%</span>
+      </div>
+      <div class="utilization-bar"><div class="utilization-fill" id="utilBar" style="width:0%"></div></div>
+      <div class="stat-row">
+        <span class="stat-label">最高分</span>
+        <span class="stat-value" id="highScore">0</span>
+      </div>
+    </div>
+    <div class="panel-card">
+      <h3>下一件</h3>
+      <canvas id="nextCanvas" width="120" height="100"></canvas>
+    </div>
+    <div class="controls-info">
+      ← → 移动 &nbsp; ↑ 旋转<br>
+      ↓ 加速 &nbsp; 空格 硬降<br>
+      1 压缩袋 &nbsp; 2 分隔板
+    </div>
+  </div>
+
+  <!-- Main Game Area -->
+  <div id="mainPanel">
+    <canvas id="gameCanvas" width="300" height="600"></canvas>
+    <div id="overlay">
+      <div id="overlayContent"></div>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div id="rightPanel">
+    <div class="panel-card">
+      <h3>收纳小贴士</h3>
+      <div class="tip-card">
+        <span class="tip-icon">💡</span>
+        <span class="tip-text" id="tipText">欢迎开始整理！</span>
+      </div>
+    </div>
+    <div class="panel-card" style="padding:12px;">
+      <h3>特殊道具</h3>
+      <button class="powerup-btn btn-compress" id="btnCompress" disabled>
+        <span>📦 压缩袋</span>
+        <span style="font-size:11px;opacity:0.7">消除一列</span>
+        <div class="cooldown-bar" id="cooldownCompress"></div>
+      </button>
+      <button class="powerup-btn btn-divider" id="btnDivider" disabled>
+        <span>📏 分隔板</span>
+        <span style="font-size:11px;opacity:0.7">临时阻挡</span>
+        <div class="cooldown-bar" id="cooldownDivider"></div>
+      </button>
+    </div>
+    <div class="panel-card">
+      <h3>收纳等级</h3>
+      <div class="level-badge" id="levelBadge">📋 初学者</div>
+      <div class="stat-row">
+        <span class="stat-label">等级</span>
+        <span class="stat-value" id="levelDisplay">1</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">速度</span>
+        <span class="stat-value" id="speedDisplay">慢</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== 常量配置 ====================
+const COLS = 10, ROWS = 20, CELL = 30;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('nextCanvas');
+const nextCtx = nextCanvas.getContext('2d');
+
+// 莫兰迪色系
+const COLORS = {
+  bg: '#F5F0EB',
+  grid: '#E8E0D8',
+  cell: '#FFFFFF',
+  // 方块颜色 - 莫兰迪色系
+  book: '#A8C0D0',      // 雾蓝 - 书籍
+  clothes: '#D4B8E8',   // 薰衣草紫 - 衣物
+  kitchen: '#C0A88A',   // 暖驼色 - 厨具
+  plant: '#9BB5A0',     // 橄榄绿 - 绿植
+  toy: '#E8C4A0',       // 杏色 - 玩具
+  electronics: '#B0B8C0', // 灰蓝 - 电子产品
+  paper: '#C8C0B8',     // 灰褐 - 纸张文件
+  glass: '#A8D0D8',     // 浅青 - 玻璃容器
+};
+
+// 方块形状定义
+const SHAPES = {
+  book: { // 书籍 - 直线条
+    name: '书籍',
+    blocks: [
+      [[0,0],[1,0],[2,0],[3,0]],  // I形
+      [[0,0],[0,1],[0,2]],          // L小
+    ],
+    color: COLORS.book
+  },
+  clothes: { // 衣物 - 软块
+    name: '衣物',
+    blocks: [
+      [[0,0],[1,0],[0,1],[1,1]],   // O形
+      [[0,0],[1,0],[1,1],[2,1]],   // Z形
+    ],
+    color: COLORS.clothes
+  },
+  kitchen: { // 厨具
+    name: '厨具',
+    blocks: [
+      [[0,0],[1,0],[2,0],[2,1]],   // J形
+      [[0,0],[1,0],[1,1],[1,2]],   // J形镜像
+    ],
+    color: COLORS.kitchen
+  },
+  plant: { // 绿植
+    name: '绿植',
+    blocks: [
+      [[1,0],[0,1],[1,1],[2,1]],   // T形
+      [[0,0],[0,1],[1,1],[2,1]],   // L形
+    ],
+    color: COLORS.plant
+  },
+  toy: { // 玩具
+    name: '玩具',
+    blocks: [
+      [[0,0],[1,0],[2,0],[0,1]],   // L形
+      [[1,0],[1,1],[1,2],[0,2]],   // J形镜像
+    ],
+    color: COLORS.toy
+  },
+  electronics: {
+    name: '电器',
+    blocks: [
+      [[0,0],[1,0],[1,1]],          // 小三角
+      [[1,0],[0,1],[1,1]],          // 小三角反
+    ],
+    color: COLORS.electronics
+  },
+  paper: {
+    name: '文件',
+    blocks: [
+      [[0,0],[1,0],[2,0]],          // 短条
+      [[0,0],[0,1]],                // 小L
+    ],
+    color: COLORS.paper
+  },
+  glass: {
+    name: '容器',
+    blocks: [
+      [[1,0],[1,1],[0,1],[2,1]],   // T形
+      [[0,0],[0,1],[1,1],[1,2]],   // S形
+    ],
+    color: COLORS.glass
+  },
+};
+
+const ITEM_TYPES = Object.keys(SHAPES);
+
+// 收纳小贴士
+const TIPS = [
+  "竖放衣物比叠放更节省空间，还能一目了然找到想要的衣服！",
+  "利用垂直空间，收纳架比平铺柜子更省地儿。",
+  "透明收纳盒能让物品一目了然，找东西不翻箱倒柜。",
+  "季节性物品可以换季收纳，减少日常整理负担。",
+  "小物件用分隔盒分类，抽屉里再也不乱糟糟。",
+  "鞋子用鞋架竖直摆放，比平放多放一倍！",
+  "包包收纳可以用填充物支撑形状，延长使用寿命。",
+  "厨房调料用磁吸架固定在柜门内侧，台面更清爽。",
+  "床下空间可以用扁平收纳盒，存放换季被褥。",
+  "电线用理线器固定，告别一团糟的线缆。",
+  "书本按高度排列，书架不仅整齐还好看。",
+  "利用墙面空间，搁板和挂架都是好帮手。",
+  "衣物按颜色排序，搭配衣服时更快找到。",
+  "行李箱不只是旅行用，平时收纳换季衣物超好用。",
+  "厨房台面尽量少放物品，不常用的收进柜子里。",
+];
+
+// 家居灵感
+const INSPIRATIONS = [
+  "🏠 日式收纳：一物一位，归位即整理",
+  "🏠 北欧风格：少即是多，留白也是美",
+  "🏠 断舍离：只保留让你心动的物品",
+  "🏠 胶囊衣橱：33件单品搞定全年穿搭",
+  "🏠 收纳三分露七分藏，美观实用兼顾",
+  "🏠 厨房收纳黄金三角：取-洗-煮动线",
+  "🏠 衣柜分区：常用区+次常用区+换季区",
+];
+
+// 等级称号
+const LEVELS = [
+  { lines: 0, title: '📋 初学者', speed: 1000 },
+  { lines: 5, title: '🌱 整理新手', speed: 850 },
+  { lines: 15, title: '📦 收纳学徒', speed: 720 },
+  { lines: 30, title: '📚 整理达人', speed: 600 },
+  { lines: 50, title: '🏠 空间规划师', speed: 500 },
+  { lines: 75, title: '✨ 收纳大师', speed: 420 },
+  { lines: 100, title: '👑 整理之神', speed: 350 },
+];
+
+// ==================== 游戏状态 ====================
+let grid = [];
+let currentPiece = null;
+let nextPieceType = null;
+let score = 0;
+let lines = 0;
+let level = 0;
+let gameOver = false;
+let gamePaused = false;
+let gameStarted = false;
+let dropInterval = 1000;
+let lastDrop = 0;
+let highScore = parseInt(localStorage.getItem('tidyBlocksHighScore') || '0');
+let totalPlaced = 0;
+let totalCleared = 0;
+
+// 道具
+let compressCount = 2;
+let dividerCount = 2;
+let compressCooldown = 0;
+let dividerCooldown = 0;
+let dividerActive = false;
+let dividerCol = -1;
+
+// 粒子效果
+let particles = [];
+let clearAnimations = [];
+
+// 音效
+let audioCtx = null;
+let musicPlaying = false;
+let musicGain = null;
+let melodyIndex = 0;
+let melodyTimer = null;
+
+// ==================== 初始化 ====================
+function initGrid() {
+  grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    grid[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      grid[r][c] = { filled: false, color: null, type: null };
+    }
+  }
+  // 分隔板列
+  if (dividerActive) {
+    for (let r = 0; r < ROWS; r++) {
+      grid[r][dividerCol] = { filled: true, color: '#C4A8D0', type: 'divider' };
+    }
+  }
+}
+
+function getRandomPieceType() {
+  return ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+}
+
+function createPiece(type) {
+  const shapes = SHAPES[type].blocks;
+  const shapeIdx = Math.floor(Math.random() * shapes.length);
+  return {
+    type: type,
+    color: SHAPES[type].color,
+    blocks: shapes[shapeIdx].map(b => [...b]),
+    x: Math.floor((COLS - shapes[shapeIdx][0].length) / 2),
+    y: 0,
+    name: SHAPES[type].name
+  };
+}
+
+function initGame() {
+  initGrid();
+  score = 0; lines = 0; level = 0;
+  totalPlaced = 0; totalCleared = 0;
+  compressCount = 2;
+  dividerCount = 2;
+  dividerActive = false;
+  dividerCol = -1;
+  dropInterval = LEVELS[0].speed;
+  gameOver = false;
+  gamePaused = false;
+  particles = [];
+  clearAnimations = [];
+  updateUI();
+  document.getElementById('highScore').textContent = highScore;
+
+  nextPieceType = getRandomPieceType();
+  spawnPiece();
+}
+
+function spawnPiece() {
+  const type = nextPieceType;
+  nextPieceType = getRandomPieceType();
+  currentPiece = createPiece(type);
+
+  // 检查是否能放下
+  if (!canPlace(currentPiece.blocks, currentPiece.x, currentPiece.y)) {
+    gameOver = true;
+    endGame();
+  }
+  drawNextPiece();
+}
+
+// ==================== 碰撞检测 ====================
+function canPlace(blocks, px, py) {
+  for (const [bx, by] of blocks) {
+    const nx = px + bx;
+    const ny = py + by;
+    if (nx < 0 || nx >= COLS || ny >= ROWS) return false;
+    if (ny >= 0 && grid[ny][nx].filled) return false;
+  }
+  return true;
+}
+
+function canRotate(blocks, px, py) {
+  // 顺时针旋转90度
+  const rotated = blocks.map(([x, y]) => [-y, x]);
+  // 归一化到正坐标
+  const minX = Math.min(...rotated.map(r => r[0]));
+  const minY = Math.min(...rotated.map(r => r[1]));
+  const normalized = rotated.map(([x, y]) => [x - minX, y - minY]);
+  return canPlace(normalized, px, py);
+}
+
+// ==================== 方块操作 ====================
+function placePiece() {
+  for (const [bx, by] of currentPiece.blocks) {
+    const gx = currentPiece.x + bx;
+    const gy = currentPiece.y + by;
+    if (gy >= 0 && gy < ROWS && gx >= 0 && gx < COLS) {
+      grid[gy][gx] = { filled: true, color: currentPiece.color, type: currentPiece.type };
+    }
+  }
+  totalPlaced++;
+  checkLines();
+  spawnPiece();
+}
+
+function moveDown() {
+  if (canPlace(currentPiece.blocks, currentPiece.x, currentPiece.y + 1)) {
+    currentPiece.y++;
+    return true;
+  }
+  return false;
+}
+
+function moveLeft() {
+  if (canPlace(currentPiece.blocks, currentPiece.x - 1, currentPiece.y)) {
+    currentPiece.x--;
+  }
+}
+
+function moveRight() {
+  if (canPlace(currentPiece.blocks, currentPiece.x + 1, currentPiece.y)) {
+    currentPiece.x++;
+  }
+}
+
+function rotate() {
+  if (canRotate(currentPiece.blocks, currentPiece.x, currentPiece.y)) {
+    const rotated = currentPiece.blocks.map(([x, y]) => [-y, x]);
+    const minX = Math.min(...rotated.map(r => r[0]));
+    const minY = Math.min(...rotated.map(r => r[1]));
+    currentPiece.blocks = rotated.map(([x, y]) => [x - minX, y - minY]);
+  }
+}
+
+function hardDrop() {
+  let dropped = 0;
+  while (canPlace(currentPiece.blocks, currentPiece.x, currentPiece.y + 1)) {
+    currentPiece.y++;
+    dropped++;
+  }
+  score += dropped * 2;
+  updateUI();
+  placePiece();
+}
+
+// ==================== 行消除 ====================
+function checkLines() {
+  let cleared = 0;
+  const clearRows = [];
+
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (grid[r].every(cell => cell.filled)) {
+      clearRows.push(r);
+      cleared++;
+    }
+  }
+
+  if (cleared > 0) {
+    // 消除动画
+    clearRows.forEach(row => {
+      clearAnimations.push({ row, progress: 0 });
+      // 粒子效果
+      for (let c = 0; c < COLS; c++) {
+        spawnParticles(c * CELL + CELL/2, row * CELL + CELL/2, grid[row][c].color || '#fff', 3);
+      }
+    });
+
+    // 移除已消除的行
+    setTimeout(() => {
+      clearRows.sort((a, b) => a - b).forEach((row, idx) => {
+        const adjusted = row - idx;
+        grid.splice(adjusted, 1);
+        const newRow = [];
+        for (let c = 0; c < COLS; c++) {
+          newRow.push({ filled: false, color: null, type: null });
+        }
+        grid.unshift(newRow);
+      });
+    }, 200);
+
+    // 计分
+    const lineScores = { 1: 100, 2: 300, 3: 500, 4: 800 };
+    score += (lineScores[cleared] || 0) * (level + 1);
+    lines += cleared;
+    totalCleared += cleared;
+
+    // 检查升级
+    checkLevelUp();
+
+    // 随机获得道具
+    if (Math.random() < 0.3 && compressCount < 3) compressCount++;
+    if (Math.random() < 0.2 && dividerCount < 3) dividerCount++;
+
+    // 更新小贴士
+    if (cleared >= 2) {
+      document.getElementById('tipText').textContent = '💪 ' + TIPS[Math.floor(Math.random() * TIPS.length)];
+    }
+
+    playSound('clear', cleared);
+    updateUI();
+  }
+}
+
+function checkLevelUp() {
+  let newLevel = 0;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (lines >= LEVELS[i].lines) { newLevel = i; break; }
+  }
+  if (newLevel > level) {
+    level = newLevel;
+    dropInterval = LEVELS[level].speed;
+    document.getElementById('levelBadge').textContent = LEVELS[level].title;
+    document.getElementById('speedDisplay').textContent = ['慢','较慢','中速','较快','快速','很快','极快'][level] || '极快';
+
+    // 显示家居灵感
+    const inspo = INSPIRATIONS[Math.floor(Math.random() * INSPIRATIONS.length)];
+    document.getElementById('tipText').textContent = '🎉 ' + inspo;
+  }
+}
+
+// ==================== 道具系统 ====================
+function useCompress() {
+  if (compressCount <= 0 || compressCooldown > 0 || gamePaused || gameOver) return;
+  compressCount--;
+  compressCooldown = 10;
+
+  // 找到最高的一行，消除整列
+  let maxFilled = 0;
+  let colToClear = 3;
+  for (let c = 0; c < COLS; c++) {
+    let filled = grid.reduce((sum, row) => sum + (row[c].filled ? 1 : 0), 0);
+    if (filled > maxFilled) { maxFilled = filled; colToClear = c; }
+  }
+
+  // 消除该列
+  for (let r = 0; r < ROWS; r++) {
+    if (grid[r][colToClear].filled) {
+      spawnParticles(colToClear * CELL + CELL/2, r * CELL + CELL/2, '#A8C0D0', 2);
+      grid[r][colToClear] = { filled: false, color: null, type: null };
+    }
+  }
+
+  score += 50;
+  playSound('powerup');
+  updateUI();
+}
+
+function useDivider() {
+  if (dividerCount <= 0 || dividerCooldown > 0 || gamePaused || gameOver) return;
+  dividerCount--;
+  dividerCooldown = 15;
+
+  if (!dividerActive) {
+    // 选择最空的一列放分隔板
+    let minFilled = COLS;
+    let bestCol = Math.floor(Math.random() * COLS);
+    for (let c = 0; c < COLS; c++) {
+      let filled = grid.reduce((sum, row) => sum + (row[c].filled ? 1 : 0), 0);
+      if (filled < minFilled) { minFilled = filled; bestCol = c; }
+    }
+    dividerCol = bestCol;
+    dividerActive = true;
+
+    // 更新网格
+    for (let r = 0; r < ROWS; r++) {
+      grid[r][dividerCol] = { filled: true, color: '#C4A8D0', type: 'divider' };
+    }
+  } else {
+    // 关闭分隔板
+    for (let r = 0; r < ROWS; r++) {
+      grid[r][dividerCol] = { filled: false, color: null, type: null };
+    }
+    dividerActive = false;
+    dividerCol = -1;
+  }
+
+  playSound('powerup');
+  updateUI();
+}
+
+// ==================== 音效系统 ====================
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playSound(type, intensity = 1) {
+  if (!audioCtx) return;
+
+  const now = audioCtx.currentTime;
+
+  switch(type) {
+    case 'drop': {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(now + 0.12);
+      break;
+    }
+    case 'clear': {
+      // 清脆的整理完成音效 - 纸张摩擦感
+      const freqs = [523, 659, 784, 1047];
+      freqs.forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f * Math.min(intensity, 3);
+        gain.gain.setValueAtTime(0.04, now + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now + i * 0.08);
+        osc.stop(now + i * 0.08 + 0.2);
+      });
+      // 摩擦声
+      const bufferSize = audioCtx.sampleRate * 0.15;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 3);
+      }
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.setValueAtTime(0.02, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 3000;
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+      noise.start(now);
+      break;
+    }
+    case 'powerup': {
+      [440, 554, 659, 880].forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        gain.gain.setValueAtTime(0.04, now + i * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.25);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now + i * 0.1);
+        osc.stop(now + i * 0.1 + 0.25);
+      });
+      break;
+    }
+    case 'gameover': {
+      [392, 349, 330, 262].forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        gain.gain.setValueAtTime(0.05, now + i * 0.25);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.25 + 0.4);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now + i * 0.25);
+        osc.stop(now + i * 0.25 + 0.4);
+      });
+      break;
+    }
+  }
+}
+
+// 背景音乐 - 钢琴+尤克里里风格
+const MELODY = [
+  523.25, 587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 493.88,
+  440, 493.88, 523.25, 587.33, 523.25, 440, 392, 440,
+  523.25, 659.25, 783.99, 880, 783.99, 659.25, 523.25, 440,
+  493.88, 587.33, 659.25, 523.25, 440, 392, 349.23, 392,
+  440, 523.25, 587.33, 659.25, 523.25, 440, 392, 349.23,
+  330, 392, 440, 523.25, 440, 392, 349.23, 330,
+];
+const BASS = [
+  130.81, 164.81, 196, 261.63, 196, 164.81, 130.81, 146.83,
+  110, 146.83, 164.81, 196, 164.81, 130.81, 110, 130.81,
+  130.81, 196, 261.63, 293.66, 261.63, 196, 130.81, 110,
+  146.83, 196, 261.63, 164.81, 130.81, 110, 87.31, 110,
+  130.81, 164.81, 196, 261.63, 164.81, 130.81, 110, 87.31,
+  82.41, 110, 130.81, 164.81, 130.81, 110, 87.31, 82.41,
+];
+let melIdx = 0;
+let musicGainNode = null;
+
+function startMusic() {
+  if (!audioCtx || musicPlaying) return;
+  musicPlaying = true;
+  melIdx = 0;
+  playMusicNote();
+}
+
+function playMusicNote() {
+  if (!musicPlaying) return;
+
+  const now = audioCtx.currentTime;
+  // 主旋律
+  const osc1 = audioCtx.createOscillator();
+  const gain1 = audioCtx.createGain();
+  osc1.type = 'sine';
+  osc1.frequency.value = MELODY[melIdx % MELODY.length] * (1 + Math.random() * 0.005);
+  gain1.gain.setValueAtTime(0.025, now);
+  gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+  osc1.connect(gain1); gain1.connect(audioCtx.destination);
+  osc1.start(now); osc1.stop(now + 0.35);
+
+  // 和声（五度）
+  const osc2 = audioCtx.createOscillator();
+  const gain2 = audioCtx.createGain();
+  osc2.type = 'triangle';
+  osc2.frequency.value = MELODY[melIdx % MELODY.length] * 1.5 * (1 + Math.random() * 0.003);
+  gain2.gain.setValueAtTime(0.012, now);
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+  osc2.connect(gain2); gain2.connect(audioCtx.destination);
+  osc2.start(now); osc2.stop(now + 0.4);
+
+  // 低音
+  const osc3 = audioCtx.createOscillator();
+  const gain3 = audioCtx.createGain();
+  osc3.type = 'sine';
+  osc3.frequency.value = BASS[melIdx % BASS.length] * 0.5;
+  gain3.gain.setValueAtTime(0.015, now);
+  gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+  osc3.connect(gain3); gain3.connect(audioCtx.destination);
+  osc3.start(now); osc3.stop(now + 0.5);
+
+  melIdx++;
+
+  // 80-90 BPM: 每拍约667-750ms
+  melodyTimer = setTimeout(playMusicNote, 667);
+}
+
+function stopMusic() {
+  musicPlaying = false;
+  if (melodyTimer) clearTimeout(melodyTimer);
+}
+
+// ==================== 粒子系统 ====================
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4 - 2,
+      life: 1,
+      decay: 0.015 + Math.random() * 0.01,
+      size: 2 + Math.random() * 3,
+      color
+    });
+  }
+}
+
+function updateParticles() {
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= p.decay;
+  });
+  particles = particles.filter(p => p.life > 0);
+}
+
+// ==================== 渲染系统 ====================
+function drawRoundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawGrid() {
+  // 背景
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL);
+
+  // 网格线
+  ctx.strokeStyle = '#E8E0D8';
+  ctx.lineWidth = 0.5;
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath();
+    ctx.moveTo(0, r * CELL);
+    ctx.lineTo(COLS * CELL, r * CELL);
+    ctx.stroke();
+  }
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath();
+    ctx.moveTo(c * CELL, 0);
+    ctx.lineTo(c * CELL, ROWS * CELL);
+    ctx.stroke();
+  }
+
+  // 分隔板
+  if (dividerActive && dividerCol >= 0) {
+    ctx.fillStyle = '#C4A8D040';
+    ctx.fillRect(dividerCol * CELL, 0, CELL, ROWS * CELL);
+    ctx.strokeStyle = '#C4A8D0';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(dividerCol * CELL + 1, 0, CELL - 2, ROWS * CELL);
+    ctx.setLineDash([]);
+  }
+}
+
+function drawCell(ctx, x, y, color, size = CELL) {
+  const padding = 1;
+  const r = 4;
+  ctx.fillStyle = color;
+  drawRoundedRect(ctx, x + padding, y + padding, size - padding * 2, size - padding * 2, r);
+  ctx.fill();
+
+  // 高光
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  drawRoundedRect(ctx, x + padding, y + padding, size - padding * 2, (size - padding * 2) * 0.4, r);
+  ctx.fill();
+}
+
+function drawGridPieces() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c].filled) {
+        drawCell(ctx, c * CELL, r * CELL, grid[r][c].color);
+
+        // 绘制物品图标
+        drawItemIcon(ctx, c * CELL + CELL/2, r * CELL + CELL/2, grid[r][c].type, CELL);
+      }
+    }
+  }
+}
+
+function drawItemIcon(ctx, x, y, type, size) {
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#fff';
+  ctx.font = `${size * 0.5}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const icons = {
+    book: '📖', clothes: '👕', kitchen: '🍳', plant: '🌿',
+    toy: '🧸', electronics: '📱', paper: '📄', glass: '🫙',
+    divider: '─'
+  };
+  ctx.fillText(icons[type] || '📦', x, y);
+  ctx.restore();
+}
+
+function drawGhostPiece() {
+  if (!currentPiece) return;
+  let ghostY = currentPiece.y;
+  while (canPlace(currentPiece.blocks, currentPiece.x, ghostY + 1)) {
+    ghostY++;
+  }
+  if (ghostY !== currentPiece.y) {
+    ctx.globalAlpha = 0.15;
+    for (const [bx, by] of currentPiece.blocks) {
+      const gx = (currentPiece.x + bx) * CELL;
+      const gy = (ghostY + by) * CELL;
+      drawCell(ctx, gx, gy, currentPiece.color);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawCurrentPiece() {
+  if (!currentPiece) return;
+  for (const [bx, by] of currentPiece.blocks) {
+    const gx = (currentPiece.x + bx) * CELL;
+    const gy = (currentPiece.y + by) * CELL;
+    if (currentPiece.y + by >= 0) {
+      drawCell(ctx, gx, gy, currentPiece.color);
+      drawItemIcon(ctx, gx + CELL/2, gy + CELL/2, currentPiece.type, CELL);
+    }
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawNextPiece() {
+  nextCtx.clearRect(0, 0, 120, 100);
+  if (!nextPieceType) return;
+
+  const shapes = SHAPES[nextPieceType].blocks;
+  const shape = shapes[0];
+  const color = SHAPES[nextPieceType].color;
+
+  // 计算居中偏移
+  let maxX = 0, maxY = 0;
+  shape.forEach(([x, y]) => { maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); });
+  const pieceW = (maxX + 1) * 22;
+  const pieceH = (maxY + 1) * 22;
+  const offsetX = (120 - pieceW) / 2;
+  const offsetY = (100 - pieceH) / 2;
+
+  for (const [bx, by] of shape) {
+    drawCell(nextCtx, offsetX + bx * 22, offsetY + by * 22, color, 22);
+  }
+
+  // 标签
+  nextCtx.fillStyle = '#999';
+  nextCtx.font = '11px "Noto Sans SC", sans-serif';
+  nextCtx.textAlign = 'center';
+  nextCtx.fillText(SHAPES[nextPieceType].name, 60, 95);
+}
+
+// ==================== UI更新 ====================
+function updateUI() {
+  document.getElementById('scoreDisplay').textContent = score;
+  document.getElementById('linesDisplay').textContent = lines;
+  document.getElementById('levelDisplay').textContent = level + 1;
+
+  // 空间利用率
+  let filledCells = 0;
+  let totalCells = COLS * ROWS;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c].filled) filledCells++;
+    }
+  }
+  const utilization = Math.round((filledCells / totalCells) * 100);
+  document.getElementById('utilDisplay').textContent = utilization + '%';
+  document.getElementById('utilBar').style.width = utilization + '%';
+
+  // 道具按钮
+  document.getElementById('btnCompress').disabled = compressCount <= 0 || compressCooldown > 0;
+  document.getElementById('btnDivider').disabled = dividerCount <= 0 || dividerCooldown > 0;
+
+  // 冷却条
+  updateCooldownBars();
+
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('tidyBlocksHighScore', highScore);
+    document.getElementById('highScore').textContent = highScore;
+  }
+}
+
+function updateCooldownBars() {
+  const compressPct = Math.max(0, (1 - compressCooldown / 10) * 100);
+  const dividerPct = Math.max(0, (1 - dividerCooldown / 15) * 100);
+  document.getElementById('cooldownCompress').style.width = compressPct + '%';
+  document.getElementById('cooldownDivider').style.width = dividerPct + '%';
+}
+
+// ==================== 游戏循环 ====================
+function gameLoop(timestamp) {
+  if (!gameStarted) { requestAnimationFrame(gameLoop); return; }
+  if (gamePaused || gameOver) { requestAnimationFrame(gameLoop); return; }
+
+  // 下落逻辑
+  if (timestamp - lastDrop > dropInterval) {
+    if (!moveDown()) {
+      playSound('drop');
+      placePiece();
+    }
+    lastDrop = timestamp;
+  }
+
+  // 冷却更新
+  if (compressCooldown > 0) compressCooldown -= 1/60;
+  if (dividerCooldown > 0) dividerCooldown -= 1/60;
+
+  updateParticles();
+
+  // 渲染
+  drawGrid();
+  drawGhostPiece();
+  drawGridPieces();
+  drawCurrentPiece();
+  drawParticles();
+  updateUI();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ==================== 弹窗 ====================
+function showOverlay(type) {
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('overlayContent');
+
+  if (type === 'start') {
+    overlay.classList.add('show');
+    overlay.style.background = 'rgba(245,240,235,0.95)';
+    content.innerHTML = `
+      <h1>📦 方块整理师</h1>
+      <h2>Tidy Blocks</h2>
+      <p>将物品整齐排列在收纳空间中<br>填满一行即可完成整理！</p>
+      <div class="overlay-tip">
+        🎮 方向键移动 · ↑旋转 · 空格硬降<br>
+        🔑 按1使用压缩袋 · 按2使用分隔板
+      </div>
+      <button class="btn-primary" onclick="startGame()">开始整理 🧹</button>
+    `;
+  } else if (type === 'gameover') {
+    overlay.classList.add('show');
+    content.innerHTML = `
+      <h2>整理结束</h2>
+      <div class="overlay-score">${score}</div>
+      <p>整理了 ${lines} 行 · ${totalPlaced} 件物品</p>
+      <div class="overlay-tip">
+        ${INSPIRATIONS[Math.floor(Math.random() * INSPIRATIONS.length)]}
+      </div>
+      <button class="btn-primary" onclick="startGame()">再来一次 🔄</button>
+    `;
+  }
+}
+
+function hideOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function endGame() {
+  stopMusic();
+  playSound('gameover');
+  document.getElementById('tipText').textContent = '整理完成！看看能得多少分吧 💪';
+  showOverlay('gameover');
+}
+
+function startGame() {
+  initAudio();
+  hideOverlay();
+  initGame();
+  gameStarted = true;
+  startMusic();
+  lastDrop = performance.now();
+}
+
+// ==================== 输入处理 ====================
+document.addEventListener('keydown', e => {
+  if (!gameStarted || gamePaused || gameOver) return;
+
+  switch(e.code) {
+    case 'ArrowLeft':
+      e.preventDefault();
+      moveLeft();
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      moveRight();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (moveDown()) { score += 1; updateUI(); }
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      rotate();
+      break;
+    case 'Space':
+      e.preventDefault();
+      hardDrop();
+      break;
+    case 'Digit1':
+      useCompress();
+      break;
+    case 'Digit2':
+      useDivider();
+      break;
+  }
+});
+
+// 道具按钮点击
+document.getElementById('btnCompress').addEventListener('click', useCompress);
+document.getElementById('btnDivider').addEventListener('click', useDivider);
+
+// ==================== 初始化 ====================
+document.getElementById('highScore').textContent = highScore;
+showOverlay('start');
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>
